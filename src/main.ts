@@ -28,7 +28,7 @@ export async function runCrawler(
   }
 
   const crawler = new PlaywrightCrawler({
-    requestHandler: async ({ page, request, enqueueLinks, pushData, log }) => {
+    requestHandler: async ({ page, request, enqueueLinks, log }) => {
       await enqueueLinks({
         globs: typeof match === 'string' ? [match] : match // Queue all link with this pattern to crawl
       })
@@ -48,7 +48,6 @@ export async function runCrawler(
       // Remove extra \n and spacess to save storage and tokens
       const cleanText = docTextContent?.replace(/\n/g, ' ').replace(/\s+/g, ' ')
 
-      pushData({ title, url: request.loadedUrl, text: cleanText })
       // save data for further creating and storing embeddings
       saveData({ title, url: request.loadedUrl, text: cleanText })
     },
