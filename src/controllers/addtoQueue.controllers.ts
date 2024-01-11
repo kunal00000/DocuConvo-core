@@ -48,6 +48,11 @@ export async function addToQueue(req: Request, res: Response) {
       openaiApiKey,
       projectId
     })
+
+    console.log(
+      'Added ' + websiteUrl + ' to queue at [' + new Date().toISOString() + ']'
+    )
+
     return res
       .status(200)
       .json({ success: true, message: `successfully added to Queue` })
@@ -60,6 +65,13 @@ export async function addToQueue(req: Request, res: Response) {
 
 crawlQueue.process(async (job, done) => {
   try {
+    console.log(
+      'Processing job ' +
+        job.data['websiteUrl'] +
+        ' at [' +
+        new Date().toISOString() +
+        ']'
+    )
     const { success, message } = await runCrawler(
       job.data['websiteUrl'],
       job.data['match'],
