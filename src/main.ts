@@ -2,6 +2,7 @@ import { PlaywrightCrawler } from 'crawlee'
 
 import { generateEmbeddings } from './lib/generate-embeddings.js'
 import { DocMetadata } from './types/docs.js'
+import { RealtimeChannel } from '@supabase/supabase-js'
 
 export async function runCrawler(
   websiteUrl: string,
@@ -12,7 +13,8 @@ export async function runCrawler(
   pineconeEnvironment: string,
   pineconeIndexName: string,
   openaiApiKey: string,
-  projectId: string
+  projectId: string,
+  projectChannel: RealtimeChannel
 ) {
   let data: DocMetadata[] = []
   const saveData = ({ title, url, text }: DocMetadata) => {
@@ -34,6 +36,15 @@ export async function runCrawler(
       })
 
       const title = await page.title()
+
+      projectChannel.send({
+        type: 'broadcast',
+        event: 'server-logs',
+        payload: {
+          message: `➤ Crawling [${title}] → ${request.loadedUrl}`
+        }
+      })
+
       log.info(`✅ ${title}`, { url: request.loadedUrl })
 
       let docTextContent: string | null
@@ -59,15 +70,31 @@ export async function runCrawler(
 
   try {
     await crawler.run([websiteUrl])
-
+    projectChannel.send({
+      type: 'broadcast',
+      event: 'server-logs',
+      payload: {
+        message: `✅ Crawl completed
+Requests failed: ${crawler.stats.state.requestsFailed}
+Requests finished: ${crawler.stats.state.requestsFinished}`
+      }
+    })
     await crawler.requestQueue?.drop()
 
+    projectChannel.send({
+      type: 'broadcast',
+      event: 'server-logs',
+      payload: {
+        message: `▻ Processing data into vector store...`
+      }
+    })
     await generateEmbeddings(data, {
       pineconeApiKey,
       pineconeEnvironment,
       pineconeIndexName,
       openaiApiKey,
-      projectId
+      projectId,
+      projectChannel
     })
     return { success: true, message: 'crawl completed' }
   } catch (error: any) {

@@ -10,6 +10,12 @@ import {
 } from '../lib/config.js'
 import { mailOptions, sendAlert } from '../lib/send-alert.js'
 import { runCrawler } from '../main.js'
+import { createClient } from '@supabase/supabase-js'
+
+const SUPABASE_URL = process.env.SUPABASE_URL || ''
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || ''
+
+export const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 export const crawlQueue = new Bull('task', {
   redis: {
@@ -49,9 +55,14 @@ export async function addToQueue(req: Request, res: Response) {
       projectId
     })
 
-    console.log(
-      'Added ' + websiteUrl + ' to queue at [' + new Date().toISOString() + ']'
-    )
+    const projectChannel = client.channel(projectId)
+    projectChannel.send({
+      type: 'broadcast',
+      event: 'server-logs',
+      payload: {
+        message: `➤ Added [${websiteUrl}] to Queue.`
+      }
+    })
 
     return res
       .status(200)
@@ -64,14 +75,16 @@ export async function addToQueue(req: Request, res: Response) {
 }
 
 crawlQueue.process(async (job, done) => {
+  const projectChannel = client.channel(job.data['projectId'])
   try {
-    console.log(
-      'Processing job ' +
-        job.data['websiteUrl'] +
-        ' at [' +
-        new Date().toISOString() +
-        ']'
-    )
+    projectChannel.send({
+      type: 'broadcast',
+      event: 'server-logs',
+      payload: {
+        message: `▻ Starting crawl...`
+      }
+    })
+
     const { success, message } = await runCrawler(
       job.data['websiteUrl'],
       job.data['match'],
@@ -81,7 +94,8 @@ crawlQueue.process(async (job, done) => {
       job.data['pineconeEnvironment'],
       job.data['pineconeIndexName'],
       job.data['openaiApiKey'],
-      job.data['projectId']
+      job.data['projectId'],
+      projectChannel
     )
 
     sendAlert({
@@ -97,12 +111,28 @@ crawlQueue.process(async (job, done) => {
         status: 'created'
       }
     })
+
+    projectChannel.send({
+      type: 'broadcast',
+      event: 'server-logs',
+      payload: {
+        message: `🎉 You are all set to connect DocuConvo.`
+      }
+    })
     done(null, { success, message })
   } catch (error: any) {
     sendAlert({
       ...mailOptions,
       subject: 'Docuconvo Alert - ❌ Crawl Failed',
       text: `Crawl failed for ${job.data['websiteUrl']} with error: ${error.message}. Take further actions accordingly.`
+    })
+
+    projectChannel.send({
+      type: 'broadcast',
+      event: 'server-logs',
+      payload: {
+        message: `❌ An error occurred: ${error.message}. `
+      }
     })
     done(error.message, { success: false, message: error.message })
   }
