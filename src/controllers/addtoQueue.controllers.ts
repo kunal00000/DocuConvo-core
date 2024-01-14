@@ -41,7 +41,7 @@ export async function addToQueue(req: Request, res: Response) {
       pineconeEnvironment,
       pineconeIndexName,
       openaiApiKey,
-      projectId
+      id: projectId
     } = req.body
     await crawlQueue.add({
       websiteUrl,
@@ -55,12 +55,10 @@ export async function addToQueue(req: Request, res: Response) {
       projectId
     })
 
-    const projectChannel = client.channel(projectId)
-    projectChannel.send({
-      type: 'broadcast',
-      event: 'server-logs',
-      payload: {
-        message: `➤ Added [${websiteUrl}] to Queue.`
+    await prisma.logMessage.create({
+      data: {
+        message: `▻ Added [${websiteUrl}] to Queue.`,
+        projectId: projectId
       }
     })
 
@@ -75,13 +73,11 @@ export async function addToQueue(req: Request, res: Response) {
 }
 
 crawlQueue.process(async (job, done) => {
-  const projectChannel = client.channel(job.data['projectId'])
   try {
-    projectChannel.send({
-      type: 'broadcast',
-      event: 'server-logs',
-      payload: {
-        message: `▻ Starting crawl...`
+    await prisma.logMessage.create({
+      data: {
+        message: `➤ Starting crawl...`,
+        projectId: job.data['projectId']
       }
     })
 
@@ -94,8 +90,7 @@ crawlQueue.process(async (job, done) => {
       job.data['pineconeEnvironment'],
       job.data['pineconeIndexName'],
       job.data['openaiApiKey'],
-      job.data['projectId'],
-      projectChannel
+      job.data['projectId']
     )
 
     sendAlert({
@@ -112,13 +107,13 @@ crawlQueue.process(async (job, done) => {
       }
     })
 
-    projectChannel.send({
-      type: 'broadcast',
-      event: 'server-logs',
-      payload: {
-        message: `🎉 You are all set to connect DocuConvo.`
+    await prisma.logMessage.create({
+      data: {
+        message: `🎉 You are all set to connect DocuConvo.`,
+        projectId: job.data['projectId']
       }
     })
+
     done(null, { success, message })
   } catch (error: any) {
     sendAlert({
@@ -127,11 +122,10 @@ crawlQueue.process(async (job, done) => {
       text: `Crawl failed for ${job.data['websiteUrl']} with error: ${error.message}. Take further actions accordingly.`
     })
 
-    projectChannel.send({
-      type: 'broadcast',
-      event: 'server-logs',
-      payload: {
-        message: `❌ An error occurred: ${error.message}. `
+    await prisma.logMessage.create({
+      data: {
+        message: `❌ An error occurred: ${error.message}. `,
+        projectId: job.data['projectId']
       }
     })
     done(error.message, { success: false, message: error.message })

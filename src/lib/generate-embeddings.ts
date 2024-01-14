@@ -4,7 +4,7 @@ import { PineconeStore } from 'langchain/vectorstores/pinecone'
 import { Index, Pinecone, RecordMetadata } from '@pinecone-database/pinecone'
 
 import { DocMetadata } from '../types/docs.js'
-import { RealtimeChannel } from '@supabase/supabase-js'
+import { prisma } from './db.js'
 
 // TODO: handle when vector store is not pinecone
 // TODO: handle when embeddings are stored already
@@ -15,15 +15,13 @@ export async function generateEmbeddings(
     pineconeEnvironment,
     pineconeIndexName,
     openaiApiKey,
-    projectId,
-    projectChannel
+    projectId
   }: {
     pineconeApiKey: string
     pineconeEnvironment: string
     pineconeIndexName: string
     openaiApiKey: string
     projectId: string
-    projectChannel: RealtimeChannel
   }
 ) {
   try {
@@ -64,11 +62,10 @@ export async function generateEmbeddings(
       { pineconeIndex }
     )
 
-    projectChannel.send({
-      type: 'broadcast',
-      event: 'server-logs',
-      payload: {
-        message: `✅ Stored vector embeddings successfully.`
+    await prisma.logMessage.create({
+      data: {
+        message: `✅ Stored vector embeddings successfully.`,
+        projectId
       }
     })
     return { success: true, message: 'Embeddings generated successfully' }

@@ -2,7 +2,7 @@ import { PlaywrightCrawler } from 'crawlee'
 
 import { generateEmbeddings } from './lib/generate-embeddings.js'
 import { DocMetadata } from './types/docs.js'
-import { RealtimeChannel } from '@supabase/supabase-js'
+import { prisma } from './lib/db.js'
 
 export async function runCrawler(
   websiteUrl: string,
@@ -13,8 +13,7 @@ export async function runCrawler(
   pineconeEnvironment: string,
   pineconeIndexName: string,
   openaiApiKey: string,
-  projectId: string,
-  projectChannel: RealtimeChannel
+  projectId: string
 ) {
   let data: DocMetadata[] = []
   const saveData = ({ title, url, text }: DocMetadata) => {
@@ -37,11 +36,10 @@ export async function runCrawler(
 
       const title = await page.title()
 
-      projectChannel.send({
-        type: 'broadcast',
-        event: 'server-logs',
-        payload: {
-          message: `➤ Crawling [${title}] → ${request.loadedUrl}`
+      await prisma.logMessage.create({
+        data: {
+          message: `▻ Crawling [${title}] → ${request.loadedUrl}`,
+          projectId
         }
       })
 
@@ -70,22 +68,19 @@ export async function runCrawler(
 
   try {
     await crawler.run([websiteUrl])
-    projectChannel.send({
-      type: 'broadcast',
-      event: 'server-logs',
-      payload: {
-        message: `✅ Crawl completed
-Requests failed: ${crawler.stats.state.requestsFailed}
-Requests finished: ${crawler.stats.state.requestsFinished}`
+
+    await prisma.logMessage.create({
+      data: {
+        message: `✅ Pages scraped → ${crawler.stats.state.requestsFinished}, Pages failed → ${crawler.stats.state.requestsFailed}`,
+        projectId
       }
     })
     await crawler.requestQueue?.drop()
 
-    projectChannel.send({
-      type: 'broadcast',
-      event: 'server-logs',
-      payload: {
-        message: `▻ Processing data into vector store...`
+    await prisma.logMessage.create({
+      data: {
+        message: `➤ Processing data into vector store...`,
+        projectId
       }
     })
     await generateEmbeddings(data, {
@@ -93,8 +88,7 @@ Requests finished: ${crawler.stats.state.requestsFinished}`
       pineconeEnvironment,
       pineconeIndexName,
       openaiApiKey,
-      projectId,
-      projectChannel
+      projectId
     })
     return { success: true, message: 'crawl completed' }
   } catch (error: any) {
