@@ -46,12 +46,29 @@ export const searchQuery = async (req: Request, res: Response) => {
       results[1]?.pageContent.replace(/<[^>]*>?/gm, '')
 
     //gpt 3.5 turbo
-    const response = await openai.createChatCompletion({
+    const responseInitial = await openai.createChatCompletion({
       model: 'gpt-3.5-turbo',
       messages: [
         {
           role: 'user',
-          content: getPrompt(searchQuery, contextText)
+          content: getInitialPrompt(searchQuery)
+        }
+      ],
+      max_tokens: 512,
+      temperature: 0
+    })
+    const dataInitial =
+      (await responseInitial.json()) as ResponseTypes['createChatCompletion']
+
+    const answerInitial = dataInitial.choices[0].message
+
+    //gpt 3.5 turbo 1106
+    const response = await openai.createChatCompletion({
+      model: 'gpt-3.5-turbo-1106',
+      messages: [
+        {
+          role: 'user',
+          content: getPrompt(searchQuery, answerInitial + contextText)
         }
       ],
       max_tokens: 512,
@@ -80,12 +97,14 @@ export const searchQuery = async (req: Request, res: Response) => {
 const getPrompt = (query: string, context: string) => {
   return `
   ${`
-    You are a very enthusiastic Organisation representative who loves
-    to help people! Given the following sections from the Organisation
-    documentation, answer the question using only that information,
-    outputted in markdown format. If you are unsure and the answer
-    is not explicitly written in the documentation, say
-    "Sorry, I don't know how to help with that."
+  You are a highly dedicated representative of our tech company,
+  committed to assisting and delighting our users. 
+  Given the provided sections from the Organization
+  documentation, please respond to the inquiry using
+  only that information. In cases where the answer is not
+  explicitly stated in the documentation,
+  kindly express, "Sorry, I don't know how to help with that," 
+  maintaining a professional and friendly tone.
   `}
 
   Context sections:
@@ -96,5 +115,20 @@ const getPrompt = (query: string, context: string) => {
   """
 
   Answer as markdown (including related code snippets if available):
+`
+}
+
+const getInitialPrompt = (query: string) => {
+  return `
+  ${`
+  As a highly qualified employee in a tech company,
+  explain the answer of Question in a way
+  that is easily understandable for someone new to the topic.
+  Provide concise explanations and practical insights to enhance comprehension.
+  `}
+
+  Question: """
+  ${query}
+  """
 `
 }
