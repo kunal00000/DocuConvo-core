@@ -62,7 +62,7 @@ export async function runCrawler(
     },
     headless: true,
     maxRequestsPerCrawl: maxPagesToCrawl,
-    maxConcurrency: 1,
+    maxConcurrency: 2,
     maxRequestRetries: 2
   })
 
