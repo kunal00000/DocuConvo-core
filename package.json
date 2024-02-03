@@ -11,7 +11,7 @@
     "start:dev": "tsx src/index.ts",
     "build": "tsc",
     "test": "echo \"Error: oops, the actor has no tests yet, sad!\" && exit 1",
-    "postinstall": "npx crawlee install-playwright-browsers && npx prisma generate"
+    "postinstall": "npx prisma generate"
   },
   "prisma": {
     "schema": "prisma/schema.prisma"

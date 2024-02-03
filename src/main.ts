@@ -1,4 +1,4 @@
-import { PlaywrightCrawler } from 'crawlee'
+import { CheerioCrawler } from 'crawlee'
 
 import { generateEmbeddings } from './lib/generate-embeddings.js'
 import { DocMetadata } from './types/docs.js'
@@ -28,13 +28,14 @@ export async function runCrawler(
     if (!isExist) data.push({ title, url, text })
   }
 
-  const crawler = new PlaywrightCrawler({
-    requestHandler: async ({ page, request, enqueueLinks, log }) => {
+  const crawler = new CheerioCrawler({
+    requestHandler: async ({ request, enqueueLinks, log, $ }) => {
       await enqueueLinks({
         globs: typeof match === 'string' ? [match] : match // Queue all link with this pattern to crawl
       })
 
-      const title = await page.title()
+      // const title = await page.title()
+      const title = $('title').text()
 
       await prisma.logMessage.create({
         data: {
@@ -48,10 +49,12 @@ export async function runCrawler(
       let docTextContent: string | null
 
       if (cssSelector) {
-        await page.waitForSelector(cssSelector)
-        docTextContent = await page.$eval(cssSelector, (el) => el.textContent)
+        // await page.waitForSelector(cssSelector)
+        // docTextContent = await page.$eval(cssSelector, (el) => el.textContent)
+        docTextContent = $(cssSelector).text()
       } else {
-        docTextContent = await page.textContent('body') // If selector is not provided, extract all text from the page.
+        docTextContent = $('body').text()
+        // docTextContent = await page.textContent('body') // If selector is not provided, extract all text from the page.
       }
 
       // Remove extra \n and spacess to save storage and tokens
@@ -60,7 +63,7 @@ export async function runCrawler(
       // save data for further creating and storing embeddings
       saveData({ title, url: request.loadedUrl, text: cleanText })
     },
-    headless: true,
+    // headless: true,
     maxRequestsPerCrawl: maxPagesToCrawl,
     maxConcurrency: 2,
     maxRequestRetries: 2
