@@ -1,9 +1,9 @@
-import type { Request, Response } from 'express'
-import { OpenAIEmbeddings } from 'langchain/embeddings/openai'
-import { PineconeStore } from 'langchain/vectorstores/pinecone'
-import { Configuration, OpenAIApi, ResponseTypes } from 'openai-edge'
+import type { Request, Response } from 'express';
+import { PineconeStore } from 'langchain/vectorstores/pinecone';
+import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
+import { GoogleGenerativeAI, TaskType } from '@google/generative-ai';
 
-import { Pinecone } from '@pinecone-database/pinecone'
+import { Pinecone } from '@pinecone-database/pinecone';
 
 export const searchQuery = async (req: Request, res: Response) => {
   const {
@@ -11,88 +11,74 @@ export const searchQuery = async (req: Request, res: Response) => {
     pineconeEnvironment,
     pineconeIndexName,
     openaiApiKey,
-    projectId
-  } = req.body
+    projectId,
+  } = req.body;
 
-  const searchQuery = req.query.q as string
+  const searchQuery = req.query.q as string;
 
   try {
     const pinecone = new Pinecone({
       apiKey: pineconeApiKey,
-      environment: pineconeEnvironment
-    })
-    const configuration = new Configuration({
-      apiKey: openaiApiKey
-    })
-    const openai = new OpenAIApi(configuration)
+      environment: pineconeEnvironment,
+    });
 
-    const pineconeIndex = await pinecone.Index(pineconeIndexName)
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-    const embeddings = new OpenAIEmbeddings({
-      openAIApiKey: openaiApiKey
-    })
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+
+    const pineconeIndex = await pinecone.Index(pineconeIndexName);
+
+    const embeddings = new GoogleGenerativeAIEmbeddings({
+      apiKey: process.env.GEMINI_API_KEY,
+      modelName: 'embedding-001',
+      taskType: TaskType.RETRIEVAL_DOCUMENT,
+    });
 
     const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
-      pineconeIndex
-    })
+      pineconeIndex,
+    });
 
     // similar vectors
     const results = await vectorStore.similaritySearch(searchQuery, 2, {
-      project: projectId
-    })
+      project: projectId,
+    });
     let contextText: string =
       results[0]?.pageContent.replace(/<[^>]*>?/gm, '') +
       ' ' +
-      results[1]?.pageContent.replace(/<[^>]*>?/gm, '')
+      results[1]?.pageContent.replace(/<[^>]*>?/gm, '');
 
-    //gpt 3.5 turbo
-    const responseInitial = await openai.createChatCompletion({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'user',
-          content: getInitialPrompt(searchQuery)
-        }
-      ],
-      max_tokens: 512,
-      temperature: 0
-    })
-    const dataInitial =
-      (await responseInitial.json()) as ResponseTypes['createChatCompletion']
+    console.log('contextText', contextText);
+    // //gpt 3.5 turbo
+    // const resultOne = await model.generateContent(
+    //   getInitialPrompt(searchQuery)
+    // );
+    // const responseOne = await resultOne.response;
 
-    const answerInitial = dataInitial.choices[0].message
+    // const answerInitial = responseOne.text();
+
+    // console.log('answerInitial', answerInitial);
 
     //gpt 3.5 turbo 1106
-    const response = await openai.createChatCompletion({
-      model: 'gpt-3.5-turbo-1106',
-      messages: [
-        {
-          role: 'user',
-          content: getPrompt(searchQuery, answerInitial + contextText)
-        }
-      ],
-      max_tokens: 512,
-      temperature: 0
-    })
+    const resultTwo = await model.generateContent(
+      getPrompt(searchQuery, contextText)
+    );
+    const responseTwo = await resultTwo.response;
 
-    const data =
-      (await response.json()) as ResponseTypes['createChatCompletion']
-
-    const answer = data.choices[0].message
+    const answer = responseTwo.text();
 
     return res.status(200).json({
       success: true,
       message: 'Query successful.',
-      answer: answer?.content
-    })
+      answer: answer,
+    });
   } catch (err: any) {
     return res.status(404).json({
       success: false,
       message: `Something went wrong: ${err.message}.`,
-      answer: null
-    })
+      answer: null,
+    });
   }
-}
+};
 
 const getPrompt = (query: string, context: string) => {
   return `
@@ -115,20 +101,20 @@ const getPrompt = (query: string, context: string) => {
   """
 
   Answer as markdown (including related code snippets if available):
-`
-}
+`;
+};
 
-const getInitialPrompt = (query: string) => {
-  return `
-  ${`
-  As a highly qualified employee in a tech company,
-  explain the answer of Question in a way
-  that is easily understandable for someone new to the topic.
-  Provide concise explanations and practical insights to enhance comprehension.
-  `}
+// const getInitialPrompt = (query: string) => {
+//   return `
+//   ${`
+//   As a highly qualified employee in a tech company,
+//   explain the answer of Question in a way
+//   that is easily understandable for someone new to the topic.
+//   Provide concise explanations and practical insights to enhance comprehension.
+//   `}
 
-  Question: """
-  ${query}
-  """
-`
-}
+//   Question: """
+//   ${query}
+//   """
+// `;
+// };

@@ -1,10 +1,11 @@
-import { OpenAIEmbeddings } from 'langchain/embeddings/openai'
-import { PineconeStore } from 'langchain/vectorstores/pinecone'
+import { PineconeStore } from 'langchain/vectorstores/pinecone';
 
-import { Index, Pinecone, RecordMetadata } from '@pinecone-database/pinecone'
+import { Index, Pinecone, RecordMetadata } from '@pinecone-database/pinecone';
 
-import { DocMetadata } from '../types/docs.js'
-import { prisma } from './db.js'
+import { DocMetadata } from '../types/docs.js';
+import { prisma } from './db.js';
+import { TaskType } from '@google/generative-ai';
+import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
 
 // TODO: handle when vector store is not pinecone
 // TODO: handle when embeddings are stored already
@@ -15,39 +16,41 @@ export async function generateEmbeddings(
     pineconeEnvironment,
     pineconeIndexName,
     openaiApiKey,
-    projectId
+    projectId,
   }: {
-    pineconeApiKey: string
-    pineconeEnvironment: string
-    pineconeIndexName: string
-    openaiApiKey: string
-    projectId: string
+    pineconeApiKey: string;
+    pineconeEnvironment: string;
+    pineconeIndexName: string;
+    openaiApiKey: string;
+    projectId: string;
   }
 ) {
   try {
     const pinecone = new Pinecone({
       apiKey: pineconeApiKey,
-      environment: pineconeEnvironment
-    })
+      environment: pineconeEnvironment,
+    });
 
-    const pineconeIndex = await pinecone.Index(pineconeIndexName)
+    const pineconeIndex = await pinecone.Index(pineconeIndexName);
 
-    const embeddings = new OpenAIEmbeddings({
-      openAIApiKey: openaiApiKey
-    })
+    const embeddings = new GoogleGenerativeAIEmbeddings({
+      apiKey: process.env.GEMINI_API_KEY,
+      modelName: 'embedding-001',
+      taskType: TaskType.RETRIEVAL_DOCUMENT,
+    });
 
     const { isExist } = await checkIfEmbeddingsExist(
       pineconeIndex,
       embeddings,
       projectId
-    )
+    );
 
     if (isExist) {
       // delete existing embeddings
       // TODO: Delete for same urls only not for all (org and project)
       // TODO: Filters in this operation are not supported 'Starter'
       // TODO: Switch to supabase or Use deleteAll for now (self-host)
-      await pineconeIndex.deleteAll()
+      await pineconeIndex.deleteAll();
     }
 
     await PineconeStore.fromTexts(
@@ -55,45 +58,45 @@ export async function generateEmbeddings(
       dataset.map((data) => {
         return {
           url: data.url,
-          project: projectId
-        }
+          project: projectId,
+        };
       }),
       embeddings,
       { pineconeIndex }
-    )
+    );
 
     await prisma.logMessage.create({
       data: {
         message: `✅ Stored vector embeddings successfully.`,
-        projectId
-      }
-    })
-    return { success: true, message: 'Embeddings generated successfully' }
+        projectId,
+      },
+    });
+    return { success: true, message: 'Embeddings generated successfully' };
   } catch (error: any) {
-    throw new Error(error.message)
+    throw new Error(error.message);
     // return { success: false, message: 'Embeddings: ' + error.message }
   }
 }
 
 export async function checkIfEmbeddingsExist(
   pineconeIndex: Index<RecordMetadata>,
-  embeddings: OpenAIEmbeddings,
+  embeddings: any,
   projectId: string
 ) {
-  const { totalRecordCount } = await pineconeIndex.describeIndexStats()
+  const { totalRecordCount } = await pineconeIndex.describeIndexStats();
 
   if (totalRecordCount && totalRecordCount > 0) {
     const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
-      pineconeIndex
-    })
+      pineconeIndex,
+    });
 
     const results = await vectorStore.similaritySearch('', 1000, {
-      project: projectId
-    })
+      project: projectId,
+    });
 
     if (results.length > 0) {
-      return { isExist: true, count: results.length }
+      return { isExist: true, count: results.length };
     }
   }
-  return { isExist: false, count: 0 }
+  return { isExist: false, count: 0 };
 }

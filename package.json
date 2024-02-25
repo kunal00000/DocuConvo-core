@@ -17,7 +17,9 @@
     "schema": "prisma/schema.prisma"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.2.1",
     "@huggingface/inference": "^2.6.4",
+    "@langchain/google-genai": "^0.0.10",
     "@pinecone-database/pinecone": "^1.1.2",
     "@prisma/client": "^5.6.0",
     "@supabase/supabase-js": "^2.39.3",
