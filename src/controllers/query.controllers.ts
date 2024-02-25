@@ -47,7 +47,7 @@ export const searchQuery = async (req: Request, res: Response) => {
       ' ' +
       results[1]?.pageContent.replace(/<[^>]*>?/gm, '');
 
-    console.log('contextText', contextText);
+    // console.log('contextText', contextText);
     // //gpt 3.5 turbo
     // const resultOne = await model.generateContent(
     //   getInitialPrompt(searchQuery)
