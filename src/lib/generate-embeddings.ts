@@ -1,4 +1,4 @@
-import { PineconeStore } from 'langchain/vectorstores/pinecone';
+import { PineconeStore } from '@langchain/pinecone';
 
 import { Index, Pinecone, RecordMetadata } from '@pinecone-database/pinecone';
 
@@ -6,9 +6,9 @@ import { DocMetadata } from '../types/docs.js';
 import { prisma } from './db.js';
 import { TaskType } from '@google/generative-ai';
 import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
+import dotenv from 'dotenv';
+dotenv.config();
 
-// TODO: handle when vector store is not pinecone
-// TODO: handle when embeddings are stored already
 export async function generateEmbeddings(
   dataset: DocMetadata[],
   {
@@ -28,7 +28,6 @@ export async function generateEmbeddings(
   try {
     const pinecone = new Pinecone({
       apiKey: pineconeApiKey,
-      environment: pineconeEnvironment,
     });
 
     const pineconeIndex = await pinecone.Index(pineconeIndexName);
@@ -54,7 +53,10 @@ export async function generateEmbeddings(
     }
 
     await PineconeStore.fromTexts(
-      dataset.map((data) => data.text!),
+      dataset.map((data) => {
+        if (!data.text || data.text == '') return ' ';
+        return data.text;
+      }),
       dataset.map((data) => {
         return {
           url: data.url,

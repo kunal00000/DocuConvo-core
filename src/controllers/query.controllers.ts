@@ -1,9 +1,10 @@
 import type { Request, Response } from 'express';
-import { PineconeStore } from 'langchain/vectorstores/pinecone';
+import { PineconeStore } from '@langchain/pinecone';
 import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
 import { GoogleGenerativeAI, TaskType } from '@google/generative-ai';
 
 import { Pinecone } from '@pinecone-database/pinecone';
+import { GoogleGenerativeAIStream, streamToResponse } from 'ai';
 
 export const searchQuery = async (req: Request, res: Response) => {
   const {
@@ -12,19 +13,20 @@ export const searchQuery = async (req: Request, res: Response) => {
     pineconeIndexName,
     openaiApiKey,
     projectId,
+    messages,
   } = req.body;
 
-  const searchQuery = req.query.q as string;
+  const searchQuery = messages[messages.length - 1].content;
+  console.log('received query', searchQuery);
 
   try {
     const pinecone = new Pinecone({
       apiKey: pineconeApiKey,
-      environment: pineconeEnvironment,
     });
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.0-pro' });
 
     const pineconeIndex = await pinecone.Index(pineconeIndexName);
 
@@ -48,7 +50,6 @@ export const searchQuery = async (req: Request, res: Response) => {
       results[1]?.pageContent.replace(/<[^>]*>?/gm, '');
 
     // console.log('contextText', contextText);
-    // //gpt 3.5 turbo
     // const resultOne = await model.generateContent(
     //   getInitialPrompt(searchQuery)
     // );
@@ -58,19 +59,36 @@ export const searchQuery = async (req: Request, res: Response) => {
 
     // console.log('answerInitial', answerInitial);
 
-    //gpt 3.5 turbo 1106
-    const resultTwo = await model.generateContent(
+    const resultTwo = await model.generateContentStream(
       getPrompt(searchQuery, contextText)
     );
-    const responseTwo = await resultTwo.response;
 
-    const answer = responseTwo.text();
+    const stream = GoogleGenerativeAIStream(resultTwo);
 
-    return res.status(200).json({
-      success: true,
-      message: 'Query successful.',
-      answer: answer,
-    });
+    // res.setHeader('Content-Type', 'application/octet-stream');
+    // res.setHeader(
+    //   'Content-Disposition',
+    //   'attachment; filename="generated_content.txt"'
+    // );
+
+    // const writableStream = new WritableStream({
+    //   write(chunk) {
+    //     res.write(chunk, (err) => {
+    //       if (err) {
+    //         console.error('Error writing chunk:', err);
+    //       }
+    //       console.log('chunk written....');
+    //     });
+    //   },
+    //   close() {
+    //     res.end();
+    //     console.log('All data successfully written!');
+    //   },
+    // });
+
+    // stream.pipeTo(writableStream);
+
+    streamToResponse(stream, res);
   } catch (err: any) {
     return res.status(404).json({
       success: false,
@@ -89,7 +107,6 @@ const getPrompt = (query: string, context: string) => {
   documentation, please respond to the inquiry using
   only that information. In cases where the answer is not
   explicitly stated in the documentation,
-  kindly express, "Sorry, I don't know how to help with that," 
   maintaining a professional and friendly tone.
   `}
 
